@@ -38,7 +38,6 @@
 
 #include <mach/tiler.h>
 
-#include "../gpu/pvr/omap4/sysconfig.h"
 #ifdef CONFIG_ION_OMAP
 #include <linux/ion.h>
 #include <linux/omap_ion.h>
@@ -394,36 +393,6 @@ long rpmsg_omx_ioctl(struct file *filp, unsigned int cmd, unsigned long arg)
 		break;
 	}
 #endif
-	case OMX_IOCSGXLATENCY:
-	{
-		bool val;
-		static uint sgx_latency_default;
-		static bool is_sgx_latency_reset = true;
-		if (get_user(val, (char __user *) arg)) {
-			dev_err(omxserv->dev,
-				"%s: %d: get_user fail: %d\n", __func__,
-				_IOC_NR(cmd), ret);
-			return -EFAULT;
-		}
-
-		if (is_sgx_latency_reset)
-			sgx_latency_default = get_sgx_apm_latency();
-
-		if (!val) {
-			/* Set APM latency default value */
-			set_sgx_apm_latency(sgx_latency_default);
-			is_sgx_latency_reset = true;
-		}
-
-		if ((val > 0) && is_sgx_latency_reset) {
-			/* Set APM latency value for MM use case */
-			set_sgx_apm_latency(SGX_ACTIVE_POWER_LATENCY_MS);
-			is_sgx_latency_reset = false;
-		}
-		break;
-
-	}
-
 	default:
 		dev_warn(omxserv->dev, "unhandled ioctl cmd: %d\n", cmd);
 		break;
@@ -728,7 +697,7 @@ static int rpmsg_omx_probe(struct rpmsg_channel *rpdev)
 
 	omxserv->dev = device_create(rpmsg_omx_class, &rpdev->dev,
 			MKDEV(major, minor), NULL,
-			rpdev->id.name);
+			"rpmsg-omx%d", minor);
 	if (IS_ERR(omxserv->dev)) {
 		ret = PTR_ERR(omxserv->dev);
 		dev_err(&rpdev->dev, "device_create failed: %d\n", ret);
@@ -804,9 +773,7 @@ static void rpmsg_omx_driver_cb(struct rpmsg_channel *rpdev, void *data,
 }
 
 static struct rpmsg_device_id rpmsg_omx_id_table[] = {
-	{ .name	= "rpmsg-omx0" }, /* ipu_c0 */
-	{ .name	= "rpmsg-omx1" }, /* ipu_c1 */
-	{ .name	= "rpmsg-omx2" }, /* dsp */
+	{ .name	= "rpmsg-omx" },
 	{ },
 };
 MODULE_DEVICE_TABLE(platform, rpmsg_omx_id_table);
